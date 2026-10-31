@@ -1,0 +1,1 @@
+Pull requests targeting main run the Terraform validation and plan workflow.
