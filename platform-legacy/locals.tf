@@ -11,6 +11,7 @@ locals {
     environment = var.environment
     project     = "azure-data-platform"
     managed_by  = "terraform"
+    owner       = "data-platform-team"
   }
 
   datalake_blob_service_id = "${azurerm_storage_account.datalake.id}/blobServices/default"
