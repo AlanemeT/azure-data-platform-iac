@@ -5,13 +5,50 @@ on:
     branches:
       - main
     paths:
-      - "platform/**"
+      - "modules/**"
+      - "environments/**"
+      - "tflint.hcl/**"
       - ".github/workflows/terraform-pr.yml"
+
+  quality-security:
+    name: Terraform Quality & Security
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup TFLint
+        uses: terraform-linters/setup-tflint@v6
+        with:
+          tflint_version: v0.64.0
+          cache: true
+
+      - name: Initialise TFLint plugins
+        run: tflint --init
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - name: Run TFLint
+        run: tflint --recursive --format compact
+
+      - name: Run Trivy IaC security scan
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: config
+          scan-ref: .
+          format: table
+          exit-code: '1'
+          severity: HIGH,CRITICAL
 
 jobs:
 
   validate:
     name: Terraform Validate
+    needs: quality-security
     runs-on: ubuntu-latest
 
     defaults:
@@ -93,5 +130,14 @@ jobs:
         run: terraform validate
 
       - name: Terraform Plan
-        run: terraform plan -input=false -no-color
+        run: terraform plan -input=false -no-tfplan
+
+      - name: Security scan Terraform plan
+  uses: aquasecurity/trivy-action@v0.36.0
+  with:
+    scan-type: config
+    scan-ref: platform/tfplan
+    format: table
+    exit-code: '1'
+    severity: HIGH,CRITICAL
 
