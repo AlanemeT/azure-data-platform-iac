@@ -29,3 +29,6 @@ override.tf.json
 
 state-backup*.json
 state-list*.txt
+
+# Include non-secret dev environment inputs
+!environments/dev/terraform.tfvars
