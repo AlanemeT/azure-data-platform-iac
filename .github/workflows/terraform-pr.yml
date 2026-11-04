@@ -7,15 +7,17 @@ on:
     paths:
       - "modules/**"
       - "environments/**"
-      - "tflint.hcl/**"
+      - ".tflint.hcl"
+      - "tflint.hcl"
       - ".github/workflows/terraform-pr.yml"
 
+permissions:
+  contents: read
+
+jobs:
   quality-security:
     name: Terraform Quality & Security
     runs-on: ubuntu-latest
-
-    permissions:
-      contents: read
 
     steps:
       - name: Checkout repository
@@ -41,10 +43,8 @@ on:
           scan-type: config
           scan-ref: .
           format: table
-          exit-code: '1'
+          exit-code: "1"
           severity: HIGH,CRITICAL
-
-jobs:
 
   validate:
     name: Terraform Validate
@@ -53,7 +53,7 @@ jobs:
 
     defaults:
       run:
-        working-directory: platform
+        working-directory: environments/dev
 
     steps:
       - name: Checkout repository
@@ -65,7 +65,9 @@ jobs:
           terraform_version: "1.16.2"
 
       - name: Terraform Format Check
-        run: terraform fmt -check -recursive
+        run: |
+          terraform fmt -check
+          terraform fmt -check -recursive ../../modules
 
       - name: Terraform Init Without Backend
         run: terraform init -backend=false -input=false
@@ -73,13 +75,10 @@ jobs:
       - name: Terraform Validate
         run: terraform validate
 
-
   plan:
     name: Terraform Plan
     needs: validate
-
     if: github.event.pull_request.head.repo.full_name == github.repository
-
     runs-on: ubuntu-latest
 
     permissions:
@@ -88,19 +87,16 @@ jobs:
 
     defaults:
       run:
-        working-directory: platform
+        working-directory: environments/dev
 
     env:
       ARM_CLIENT_ID: ${{ vars.AZURE_PLAN_CLIENT_ID }}
       ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
       ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
-
       ARM_USE_OIDC: "true"
       ARM_USE_AZUREAD: "true"
-
       TF_VAR_subscription_id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
       TF_VAR_alert_email: ${{ secrets.ALERT_EMAIL }}
-
       TF_IN_AUTOMATION: "true"
       TF_INPUT: "false"
 
@@ -112,6 +108,7 @@ jobs:
         uses: hashicorp/setup-terraform@v4
         with:
           terraform_version: "1.16.2"
+          terraform_wrapper: false
 
       - name: Login to Azure using OIDC
         uses: azure/login@v3
@@ -122,7 +119,7 @@ jobs:
 
       - name: Terraform Init
         run: |
-          terraform init \
+          terraform init -input=false \
             -backend-config="backend.hcl" \
             -backend-config="storage_account_name=${{ vars.TFSTATE_STORAGE_ACCOUNT }}"
 
@@ -130,14 +127,16 @@ jobs:
         run: terraform validate
 
       - name: Terraform Plan
-        run: terraform plan -input=false -no-tfplan
+        run: terraform plan -input=false -no-color -out=tfplan
+
+      - name: Export Terraform Plan as JSON
+        run: terraform show -json tfplan > tfplan.json
 
       - name: Security scan Terraform plan
-  uses: aquasecurity/trivy-action@v0.36.0
-  with:
-    scan-type: config
-    scan-ref: platform/tfplan
-    format: table
-    exit-code: '1'
-    severity: HIGH,CRITICAL
-
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: config
+          scan-ref: environments/dev/tfplan.json
+          format: table
+          exit-code: "1"
+          severity: HIGH,CRITICAL
