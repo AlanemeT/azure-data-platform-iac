@@ -14,6 +14,11 @@ resource "azurerm_key_vault" "platform" {
 
   public_network_access_enabled = false
 
+  network_acls {
+    default_action = "Deny"
+    bypass         = "None"
+  }
+
   tags = var.tags
 }
 

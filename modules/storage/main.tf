@@ -18,6 +18,10 @@ resource "azurerm_storage_account" "datalake" {
   allow_nested_items_to_be_public = false
 
   public_network_access = "Disabled"
+  network_rules {
+    default_action = "Deny"
+    bypass         = ["None"]
+  }
 
   tags = var.tags
 }

@@ -9,6 +9,7 @@ resource "azurerm_data_factory" "platform" {
   resource_group_name = var.resource_group_name
 
   managed_virtual_network_enabled = true
+  public_network_enabled          = false
 
   identity {
     type = "SystemAssigned"
@@ -30,6 +31,7 @@ resource "azurerm_data_factory_integration_runtime_azure" "managed" {
   location = var.location
 
   virtual_network_enabled = true
+
 
   description = "Azure Integration Runtime deployed inside the ADF managed virtual network"
 }
