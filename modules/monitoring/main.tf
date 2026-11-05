@@ -67,7 +67,6 @@ resource "azurerm_monitor_diagnostic_setting" "datalake_blob" {
   target_resource_id         = var.datalake_blob_service_id
   log_analytics_workspace_id = azurerm_log_analytics_workspace.platform.id
 
-  log_analytics_destination_type = "Dedicated"
 
   enabled_log {
     category = "StorageRead"
