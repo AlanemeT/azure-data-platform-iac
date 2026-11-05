@@ -2,6 +2,9 @@
 # ADLS Gen2
 # ---------------------------------------------------------
 
+# Trusted-service bypass intentionally disabled.
+# Access is designed to use private endpoints and Azure RBAC.
+# trivy:ignore:AZU-0010
 resource "azurerm_storage_account" "datalake" {
   name = "stdp${var.unique_suffix}${var.environment}"
 
@@ -18,6 +21,13 @@ resource "azurerm_storage_account" "datalake" {
   allow_nested_items_to_be_public = false
 
   public_network_access = "Disabled"
+
+  # Trusted-service bypass intentionally disabled; access uses private endpoints.
+  # trivy:ignore:AZU-0010
+  network_rules {
+    default_action = "Deny"
+    bypass         = ["None"]
+  }
 
   tags = var.tags
 }

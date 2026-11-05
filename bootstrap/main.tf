@@ -21,6 +21,12 @@ resource "azurerm_resource_group" "tfstate" {
   tags = local.tags
 }
 
+
+# Temporary lab exception: remote state is accessed by a local workstation
+# and standard GitHub-hosted runners without a configured allowed network.
+# Container access remains private and requires authorization.
+# TODO: Configure restricted runner connectivity before enabling default-deny.
+# trivy:ignore:AZU-0012:exp:2026-12-05
 resource "azurerm_storage_account" "tfstate" {
   name                     = "sttfstate${local.subscription_suffix}"
   resource_group_name      = azurerm_resource_group.tfstate.name
