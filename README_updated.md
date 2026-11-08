@@ -962,6 +962,51 @@ Because the Terraform project also creates Azure role assignments, the apply ide
 
 This implements a stronger least-privilege model than using one highly privileged CI identity.
 
+## CI/CD RBAC Model Used
+
+The working CI/CD design ultimately required the following separation of permissions:
+
+| Identity | Purpose | Key Azure permissions |
+|---|---|---|
+| `gha-azure-data-platform-plan` | Pull Request `terraform plan` | `Reader` on the platform resource group plus `Storage Blob Data Contributor` on the Terraform state container |
+| `gha-azure-data-platform-apply` | Post-merge `terraform apply` | `Contributor` on the platform resource group, monitoring permissions required for Azure Monitor diagnostic settings, RBAC-management permission for Terraform-managed role assignments, plus `Storage Blob Data Contributor` on the Terraform state container |
+
+A key lesson from implementation was that **successful OIDC authentication does not automatically mean the identity has sufficient Azure RBAC permissions**.
+
+The plan workflow initially failed with:
+
+```text
+Microsoft.Resources/subscriptions/resourceGroups/read
+```
+
+because the plan identity did not have sufficient read access at the resource-group scope.
+
+The apply workflow later failed with:
+
+```text
+Microsoft.Insights/diagnosticSettings/write
+```
+
+while updating Azure Monitor Diagnostic Settings. This was resolved by verifying the identity and RBAC scope used by the workflow and ensuring the apply identity had the required monitoring permissions.
+
+The project therefore treats these as separate concerns:
+
+```text
+OIDC authentication
+        |
+        v
+Who is the GitHub workflow?
+
+        +
+
+Azure RBAC
+        |
+        v
+What is that identity allowed to do?
+```
+
+Both must be correct for Terraform CI/CD to succeed.
+
 ---
 
 # 23. Terraform State Permissions
@@ -1742,6 +1787,51 @@ The Terraform dependency lock file should normally remain committed:
 .terraform.lock.hcl
 ```
 
+## Important: Environment `terraform.tfvars`
+
+The environment files used by this project contain **non-secret configuration** such as:
+
+```text
+environment
+location
+VNet CIDR ranges
+subnet CIDR ranges
+```
+
+For example:
+
+```text
+environments/dev/terraform.tfvars
+```
+
+These files should be committed if the CI/CD workflow relies on them.
+
+Do not use a blanket `.gitignore` rule such as:
+
+```gitignore
+*.tfvars
+```
+
+if it would accidentally exclude the tracked environment configuration.
+
+Sensitive values such as the alert email are supplied separately through GitHub Secrets or `TF_VAR_...` environment variables instead of being stored in committed tfvars files.
+
+A CI troubleshooting lesson from this project was that a Terraform plan can fail with missing input-variable errors when the workflow is running from the wrong directory or when required non-secret environment configuration was never committed.
+
+The workflow therefore runs Terraform from:
+
+```text
+environments/dev
+```
+
+so Terraform automatically loads:
+
+```text
+terraform.tfvars
+```
+
+from the correct environment root.
+
 ---
 
 # 46. Security Principles Demonstrated
@@ -1887,6 +1977,391 @@ This project demonstrates practical experience with:
 - Environment promotion
 - IaC security scanning
 - Platform automation
+
+---
+
+# Real-World Issues Encountered and Resolved
+
+The platform was not built as a perfectly linear tutorial. Several genuine Azure/Terraform failures were encountered and resolved during implementation. These issues became some of the most useful platform-engineering lessons in the project.
+
+## 1. `Microsoft.Insights` Provider Registration
+
+When the observability layer was first deployed, Terraform successfully created some resources but Azure Monitor Diagnostic Settings failed with an error similar to:
+
+```text
+409 InvalidAuthenticationToken
+The subscription is not registered to use namespace 'Microsoft.Insights'
+```
+
+The fix was to explicitly register the Azure resource provider:
+
+```powershell
+az provider register `
+  --namespace Microsoft.Insights `
+  --subscription $env:TF_VAR_subscription_id `
+  --wait
+```
+
+Registration was verified with:
+
+```powershell
+az provider show `
+  --namespace Microsoft.Insights `
+  --subscription $env:TF_VAR_subscription_id `
+  --query registrationState `
+  -o tsv
+```
+
+Expected result:
+
+```text
+Registered
+```
+
+An important lesson was that Azure resource-provider registration can also require propagation time even after the provider reports `Registered`.
+
+### What Terraform did during the partial failure
+
+The apply was **partially successful**.
+
+For example, resources such as the Log Analytics workspace or Action Group could be created successfully while Diagnostic Settings failed.
+
+Terraform retained the successful resources in state.
+
+The next plan therefore did **not** attempt to recreate everything. It proposed only the resources that had failed.
+
+Conceptually:
+
+```text
+First apply
+    |
+    +-- Log Analytics -------- SUCCESS
+    |
+    +-- Action Group --------- SUCCESS
+    |
+    +-- Diagnostic Setting --- FAILED
+    |
+    `-- Diagnostic Setting --- FAILED
+
+
+Second terraform plan
+    |
+    `-- Retry only failed resources
+```
+
+This demonstrated why Terraform state must be inspected after a failed or partially successful apply instead of assuming the whole deployment rolled back.
+
+---
+
+## 2. PR Plan Identity Missing Resource-Group Read Permission
+
+The GitHub Actions Pull Request workflow authenticated successfully with Azure through OIDC, but `terraform plan` failed with a `403 AuthorizationFailed` error involving:
+
+```text
+Microsoft.Resources/subscriptions/resourceGroups/read
+```
+
+The problem was not OIDC.
+
+Authentication had succeeded.
+
+The problem was **authorization**.
+
+The plan identity:
+
+```text
+gha-azure-data-platform-plan
+```
+
+needed `Reader` access at the platform resource-group scope.
+
+This led to a useful troubleshooting model:
+
+```text
+OIDC succeeded
+      |
+      v
+Identity established
+      |
+      v
+Check Azure RBAC
+      |
+      v
+Check role + scope
+```
+
+A successful login is therefore only the first step.
+
+---
+
+## 3. Apply Identity Missing Diagnostic-Settings Permission
+
+The deployment workflow later failed while modifying:
+
+```text
+Microsoft.Insights/diagnosticSettings
+```
+
+with a `403 AuthorizationFailed` error involving:
+
+```text
+Microsoft.Insights/diagnosticSettings/write
+```
+
+The apply identity was verified using the Azure CLI and its role assignments were reviewed at the relevant scope.
+
+The final CI/CD model ensures that the apply identity has the permissions required for:
+
+```text
+normal Azure resource deployment
++
+Azure Monitor / diagnostic settings
++
+Terraform-managed RBAC role assignments
++
+Terraform remote state
+```
+
+This issue reinforced an important principle:
+
+> Azure permissions must be designed around the actual resource operations Terraform performs, not merely around the fact that the workflow is called "apply".
+
+---
+
+## 4. Contributor Does Not Cover Every Terraform Operation
+
+The platform uses Terraform to create Azure role assignments.
+
+A standard `Contributor` role can manage most Azure resources, but it does not grant unrestricted role-assignment management.
+
+The apply identity therefore requires dedicated RBAC-management permission at the appropriate scope for Terraform resources such as:
+
+```hcl
+resource "azurerm_role_assignment" "..." {
+}
+```
+
+This is why the CI/CD identity design includes separate RBAC-management capability rather than simply granting broader `Owner` permissions.
+
+---
+
+## 5. Terraform State Access Is Separate from Platform Access
+
+The CI identities need permissions in two different places:
+
+```text
+Platform resource group
+        |
+        +-- Reader / Contributor / Monitoring / RBAC permissions
+
+Terraform state storage
+        |
+        `-- Storage Blob Data Contributor
+```
+
+An identity can have sufficient permissions to inspect Azure resources and still fail during:
+
+```text
+terraform init
+terraform plan
+terraform apply
+```
+
+if it cannot access the remote state container.
+
+This was treated as a separate RBAC concern.
+
+---
+
+## 6. CI Workflow Input Variables and Working Directory
+
+During CI/CD testing, Terraform initially behaved as though required variables were missing.
+
+The important checks were:
+
+```text
+Is the workflow running from the correct Terraform root?
+Are required environment files committed?
+Are secrets passed through TF_VAR_*?
+```
+
+After the module refactor, the correct Terraform root became:
+
+```text
+environments/dev
+```
+
+The workflow therefore uses that directory rather than the old:
+
+```text
+platform
+```
+
+The non-sensitive environment configuration is loaded from:
+
+```text
+environments/dev/terraform.tfvars
+```
+
+while sensitive values are supplied separately.
+
+This distinction became especially important after the project was refactored into reusable modules.
+
+---
+
+## 7. `terraform plan` Does Not Change Azure
+
+Another useful CI/CD lesson was understanding the boundary between:
+
+```text
+terraform plan
+```
+
+and:
+
+```text
+terraform apply
+```
+
+`terraform plan`:
+
+```text
+reads configuration
+reads state
+reads Azure
+calculates differences
+shows proposed actions
+```
+
+but does not make the infrastructure changes.
+
+The deployment workflow creates a saved plan:
+
+```powershell
+terraform plan -out=tfplan
+```
+
+and then applies that exact plan:
+
+```powershell
+terraform apply tfplan
+```
+
+This makes the plan reviewed by the deployment workflow the plan that Terraform actually executes.
+
+---
+
+## 8. Safe Module Refactoring
+
+When the Terraform configuration was refactored into modules, the existing remote state key was preserved:
+
+```text
+data-platform/dev.tfstate
+```
+
+Changing to a new empty state key would have made Terraform believe the already-deployed Azure platform did not exist in its state.
+
+That could have produced a plan proposing large numbers of new resources.
+
+The project therefore preserved the existing backend state and used `moved` blocks to change addresses safely.
+
+The safety rule used during migration was:
+
+```text
+Unexpected mass add/destroy plan
+          |
+          v
+        STOP
+          |
+          v
+Do not run terraform apply
+```
+
+---
+
+## 9. Configuration Errors Caught Before Deployment
+
+Several smaller Terraform configuration issues were also encountered during development, including:
+
+```text
+Reference to undeclared local value
+```
+
+after changing:
+
+```text
+local.tags
+```
+
+to:
+
+```text
+local.common_tags
+```
+
+and:
+
+```text
+Reference to undeclared input variable
+```
+
+for:
+
+```text
+var.alert_email
+```
+
+These errors reinforced why the CI pipeline now runs:
+
+```text
+terraform fmt
+TFLint
+Trivy
+terraform validate
+terraform plan
+```
+
+before deployment.
+
+---
+
+## 10. Operational Troubleshooting Approach Developed
+
+The troubleshooting pattern used throughout the project became:
+
+```text
+1. Read the exact Terraform/Azure error
+        |
+        v
+2. Identify the failing Azure operation
+        |
+        v
+3. Determine whether the issue is:
+   - Terraform configuration
+   - state
+   - authentication
+   - Azure RBAC
+   - resource-provider registration
+   - networking
+   - service configuration
+        |
+        v
+4. Inspect Azure CLI / Terraform state
+        |
+        v
+5. Correct the root cause
+        |
+        v
+6. Run terraform plan again
+        |
+        v
+7. Confirm the proposed change is safe
+        |
+        v
+8. Apply
+```
+
+This troubleshooting experience became an important outcome of the project in addition to the infrastructure itself.
 
 ---
 
@@ -2115,6 +2590,11 @@ The following major milestones have been completed:
 [✓] Separate environment state strategy
 [✓] Pull Request workflow
 [✓] Merge-to-main workflow
+[✓] Azure provider-registration troubleshooting
+[✓] OIDC/RBAC troubleshooting for plan and apply identities
+[✓] Diagnostic Settings permission troubleshooting
+[✓] Partial Terraform apply recovery
+[✓] CI variable / environment-root troubleshooting
 ```
 
 ---
