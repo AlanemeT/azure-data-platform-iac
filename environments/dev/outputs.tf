@@ -25,3 +25,19 @@ output "data_factory_principal_id" {
 output "log_analytics_workspace_name" {
   value = module.monitoring.log_analytics_workspace_name
 }
+
+output "snowflake_database_name" {
+  value = module.snowflake.database_name
+}
+
+output "snowflake_warehouse_name" {
+  value = module.snowflake.warehouse_name
+}
+
+output "snowflake_engineer_role" {
+  value = module.snowflake.engineer_role_name
+}
+
+output "snowflake_reader_role" {
+  value = module.snowflake.reader_role_name
+}

@@ -108,3 +108,13 @@ module "monitoring" {
 
   tags = local.common_tags
 }
+
+# =========================================================
+# Snowflake
+# =========================================================
+
+module "snowflake" {
+  source = "../../modules/snowflake"
+
+  environment = var.environment
+}
