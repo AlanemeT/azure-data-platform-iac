@@ -41,3 +41,20 @@ output "snowflake_engineer_role" {
 output "snowflake_reader_role" {
   value = module.snowflake.reader_role_name
 }
+
+output "snowflake_ingestion_storage_account" {
+  value = module.snowflake_ingestion.storage_account_name
+}
+
+output "snowflake_stage_url" {
+  value = module.snowflake_ingestion.stage_url
+}
+
+output "snowflake_azure_consent_url" {
+  value     = module.snowflake.azure_consent_url
+  sensitive = true
+}
+
+output "snowflake_azure_multi_tenant_app_name" {
+  value = module.snowflake.azure_multi_tenant_app_name
+}

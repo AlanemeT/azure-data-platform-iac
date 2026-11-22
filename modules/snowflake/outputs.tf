@@ -21,3 +21,20 @@ output "engineer_role_name" {
 output "reader_role_name" {
   value = snowflake_account_role.reader.name
 }
+
+output "azure_storage_integration_name" {
+  value = snowflake_storage_integration_azure.azure_ingestion.name
+}
+
+output "azure_external_stage_name" {
+  value = snowflake_stage_external_azure.azure_ingestion.name
+}
+
+output "azure_consent_url" {
+  value     = snowflake_storage_integration_azure.azure_ingestion.describe_output[0].consent_url
+  sensitive = true
+}
+
+output "azure_multi_tenant_app_name" {
+  value = snowflake_storage_integration_azure.azure_ingestion.describe_output[0].multi_tenant_app_name
+}

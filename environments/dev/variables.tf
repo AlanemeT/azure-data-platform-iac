@@ -54,3 +54,10 @@ variable "snowflake_user" {
   description = "Snowflake Terraform service user"
   type        = string
 }
+
+
+variable "snowflake_azure_sp_object_id" {
+  description = "Azure Object ID for the Snowflake storage integration service principal"
+  type        = string
+  default     = null
+}

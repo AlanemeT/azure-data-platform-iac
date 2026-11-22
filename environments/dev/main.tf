@@ -117,4 +117,25 @@ module "snowflake" {
   source = "../../modules/snowflake"
 
   environment = var.environment
+
+  azure_tenant_id = data.azurerm_client_config.current.tenant_id
+
+  azure_stage_url = module.snowflake_ingestion.stage_url
+}
+
+
+# =========================================================
+# Snowflake Azure Ingestion Storage
+# =========================================================
+
+module "snowflake_ingestion" {
+  source = "../../modules/snowflake_ingestion"
+
+  resource_group_name = azurerm_resource_group.platform.name
+  location            = azurerm_resource_group.platform.location
+
+  environment   = var.environment
+  unique_suffix = local.unique_suffix
+
+  tags = local.common_tags
 }

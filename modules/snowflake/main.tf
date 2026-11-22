@@ -189,3 +189,56 @@ resource "snowflake_grant_account_role" "reader_to_sysadmin" {
   role_name        = snowflake_account_role.reader.name
   parent_role_name = "SYSADMIN"
 }
+
+resource "snowflake_storage_integration_azure" "azure_ingestion" {
+  name = "AZURE_INGEST_${local.environment_upper}"
+
+  enabled = true
+
+  azure_tenant_id = var.azure_tenant_id
+
+  storage_allowed_locations = [
+    var.azure_stage_url
+  ]
+
+  comment = "Azure ingestion integration managed by Terraform"
+}
+
+resource "snowflake_file_format_csv" "ingestion" {
+  database = snowflake_database.platform.name
+  schema   = snowflake_schema.raw.name
+
+  name = "CSV_INGEST"
+
+  skip_header = 1
+
+  field_delimiter = ","
+
+  field_optionally_enclosed_by = "\""
+
+  empty_field_as_null = "true"
+
+  null_if = [
+    "NULL",
+    ""
+  ]
+
+  comment = "CSV file format for Azure ingestion"
+}
+
+resource "snowflake_stage_external_azure" "azure_ingestion" {
+  name = "AZURE_INGEST_STAGE"
+
+  database = snowflake_database.platform.name
+  schema   = snowflake_schema.raw.name
+
+  url = var.azure_stage_url
+
+  storage_integration = snowflake_storage_integration_azure.azure_ingestion.name
+
+  file_format {
+    format_name = snowflake_file_format_csv.ingestion.fully_qualified_name
+  }
+
+  comment = "Azure external stage for dev ingestion"
+}
