@@ -58,3 +58,7 @@ output "snowflake_azure_consent_url" {
 output "snowflake_azure_multi_tenant_app_name" {
   value = module.snowflake.azure_multi_tenant_app_name
 }
+
+output "snowpipe_queue_url" {
+  value = module.snowflake_ingestion.snowpipe_queue_url
+}

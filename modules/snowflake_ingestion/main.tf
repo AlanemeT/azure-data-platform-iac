@@ -32,3 +32,56 @@ resource "azurerm_storage_container" "ingestion" {
 
   container_access_type = "private"
 }
+
+# ---------------------------------------------------------
+# Snowpipe notification queue
+# ---------------------------------------------------------
+
+resource "azurerm_storage_queue" "snowpipe" {
+  name = "snowpipe-events"
+
+  storage_account_id = azurerm_storage_account.snowflake_ingestion.id
+}
+
+resource "azurerm_eventgrid_system_topic" "snowpipe" {
+  name = "egst-snowpipe-${var.environment}"
+
+  location            = var.location
+  resource_group_name = var.resource_group_name
+
+  source_resource_id = azurerm_storage_account.snowflake_ingestion.id
+
+  topic_type = "Microsoft.Storage.StorageAccounts"
+
+  tags = var.tags
+}
+
+resource "azurerm_eventgrid_system_topic_event_subscription" "snowpipe" {
+  name = "evsub-snowpipe-${var.environment}"
+
+  system_topic = azurerm_eventgrid_system_topic.snowpipe.name
+
+  resource_group_name = var.resource_group_name
+
+  included_event_types = [
+    "Microsoft.Storage.BlobCreated"
+  ]
+
+  subject_filter {
+    subject_begins_with = "/blobServices/default/containers/${azurerm_storage_container.ingestion.name}/blobs/incoming/customers/"
+    case_sensitive      = false
+  }
+
+  storage_queue_endpoint {
+    storage_account_id = azurerm_storage_account.snowflake_ingestion.id
+
+    queue_name = azurerm_storage_queue.snowpipe.name
+
+    queue_message_time_to_live_in_seconds = 86400
+  }
+
+  retry_policy {
+    max_delivery_attempts = 30
+    event_time_to_live    = 1440
+  }
+}
