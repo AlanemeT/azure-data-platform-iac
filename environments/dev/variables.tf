@@ -39,3 +39,25 @@ variable "alert_email" {
   type        = string
   sensitive   = true
 }
+
+variable "snowflake_organization_name" {
+  description = "Snowflake organization name"
+  type        = string
+}
+
+variable "snowflake_account_name" {
+  description = "Snowflake account name"
+  type        = string
+}
+
+variable "snowflake_user" {
+  description = "Snowflake Terraform service user"
+  type        = string
+}
+
+
+variable "snowflake_azure_sp_object_id" {
+  description = "Azure Object ID for the Snowflake storage integration service principal"
+  type        = string
+  default     = null
+}

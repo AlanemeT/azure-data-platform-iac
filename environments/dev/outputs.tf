@@ -25,3 +25,40 @@ output "data_factory_principal_id" {
 output "log_analytics_workspace_name" {
   value = module.monitoring.log_analytics_workspace_name
 }
+
+output "snowflake_database_name" {
+  value = module.snowflake.database_name
+}
+
+output "snowflake_warehouse_name" {
+  value = module.snowflake.warehouse_name
+}
+
+output "snowflake_engineer_role" {
+  value = module.snowflake.engineer_role_name
+}
+
+output "snowflake_reader_role" {
+  value = module.snowflake.reader_role_name
+}
+
+output "snowflake_ingestion_storage_account" {
+  value = module.snowflake_ingestion.storage_account_name
+}
+
+output "snowflake_stage_url" {
+  value = module.snowflake_ingestion.stage_url
+}
+
+output "snowflake_azure_consent_url" {
+  value     = module.snowflake.azure_consent_url
+  sensitive = true
+}
+
+output "snowflake_azure_multi_tenant_app_name" {
+  value = module.snowflake.azure_multi_tenant_app_name
+}
+
+output "snowpipe_queue_url" {
+  value = module.snowflake_ingestion.snowpipe_queue_url
+}

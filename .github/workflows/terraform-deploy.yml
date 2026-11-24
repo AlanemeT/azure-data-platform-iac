@@ -44,6 +44,10 @@ jobs:
       TF_VAR_subscription_id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
       TF_VAR_alert_email: ${{ secrets.ALERT_EMAIL }}
 
+      TF_VAR_snowflake_organization_name: ${{ vars.SNOWFLAKE_ORGANIZATION_NAME }}
+      TF_VAR_snowflake_account_name: ${{ vars.SNOWFLAKE_ACCOUNT_NAME }}
+      TF_VAR_snowflake_user: ${{ vars.SNOWFLAKE_APPLY_USER }}
+
       TF_IN_AUTOMATION: "true"
       TF_INPUT: "false"
 
@@ -62,6 +66,12 @@ jobs:
           client-id: ${{ vars.AZURE_APPLY_CLIENT_ID }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Configure Snowflake OIDC
+        uses: snowflakedb/snowflake-actions@v3
+        with:
+          use-oidc: true
+          cli-version: "3.16"
 
       - name: Verify Azure identity
         run: az account show --output table
