@@ -3,5 +3,5 @@ provider "snowflake" {
   account_name      = var.snowflake_account_name
   user              = var.snowflake_user
   authenticator     = "SNOWFLAKE_JWT"
-  role = "TERRAFORM_ADMIN"
+  role              = "TERRAFORM_ADMIN"
 }
