@@ -47,6 +47,7 @@ jobs:
       TF_VAR_snowflake_organization_name: ${{ vars.SNOWFLAKE_ORGANIZATION_NAME }}
       TF_VAR_snowflake_account_name: ${{ vars.SNOWFLAKE_ACCOUNT_NAME }}
       TF_VAR_snowflake_user: ${{ vars.SNOWFLAKE_APPLY_USER }}
+      SNOWFLAKE_PRIVATE_KEY: ${{ secrets.SNOWFLAKE_APPLY_PRIVATE_KEY }}
       TF_VAR_snowflake_azure_sp_object_id: ${{ vars.SNOWFLAKE_AZURE_SP_OBJECT_ID }}
 
       TF_IN_AUTOMATION: "true"
