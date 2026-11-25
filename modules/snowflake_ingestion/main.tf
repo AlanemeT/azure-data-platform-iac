@@ -1,3 +1,7 @@
+# Dev ingestion lab uses public connectivity for ADF and Snowflake.
+# Containers are private and data access requires authentication.
+# TODO: Restrict storage networking when approved access paths are configured.
+#trivy:ignore:azure-storage-default-action-deny
 resource "azurerm_storage_account" "snowflake_ingestion" {
   name = "stsf${var.unique_suffix}${var.environment}"
 
