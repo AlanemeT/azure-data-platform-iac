@@ -103,6 +103,7 @@ jobs:
       TF_VAR_snowflake_organization_name: ${{ vars.SNOWFLAKE_ORGANIZATION_NAME }}
       TF_VAR_snowflake_account_name: ${{ vars.SNOWFLAKE_ACCOUNT_NAME }}
       TF_VAR_snowflake_user: ${{ vars.SNOWFLAKE_PLAN_USER }}
+      SNOWFLAKE_PRIVATE_KEY: ${{ secrets.SNOWFLAKE_PLAN_PRIVATE_KEY }}
       TF_IN_AUTOMATION: "true"
       TF_INPUT: "false"
       
